@@ -1,6 +1,6 @@
 export interface Env {
   DB: D1Database
-  ASSETS: R2Bucket
+  MEDIA: R2Bucket
   JWT_SECRET: string
   ADMIN_PASSWORD_HASH: string
   ADMIN_EMAIL: string
