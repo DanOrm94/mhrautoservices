@@ -2,6 +2,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { json, requireAdmin, type Env } from '../_middleware'
 
 type InvoiceBody = {
+  invoice_number?: string
   customer_name?: string
   customer_email?: string
   customer_phone?: string
@@ -27,8 +28,6 @@ async function buildPdf(env: Env, invoiceNumber: string, body: Required<Pick<Inv
   const W = page.getWidth(); const H = page.getHeight()
   const black = rgb(0.16, 0.16, 0.16); const grey = rgb(0.38, 0.38, 0.38); const line = rgb(0.72, 0.72, 0.72); const white = rgb(1, 1, 1)
   page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: white })
-
-  // Supplied template: centred logo at the top and a clean black/grey print layout.
   if (logoBytes?.length) {
     try {
       const logo = await doc.embedJpg(logoBytes)
@@ -37,13 +36,10 @@ async function buildPdf(env: Env, invoiceNumber: string, body: Required<Pick<Inv
       page.drawImage(logo, { x: (W - logoW) / 2, y: 735, width: logoW, height: logoH })
     } catch { page.drawText(env.GARAGE_NAME || 'MHR Auto Services', { x: 42, y: 755, size: 20, font: bold, color: black }) }
   } else page.drawText(env.GARAGE_NAME || 'MHR Auto Services', { x: 42, y: 755, size: 20, font: bold, color: black })
-
   page.drawText('INVOICE', { x: 490, y: 690, size: 22, font: bold, color: grey })
-
   let customerY = 655
   page.drawText(body.customer_name, { x: 24, y: customerY, size: 10, font: regular, color: black }); customerY -= 14
   if (body.customer_address) for (const addressLine of String(body.customer_address).split(/\r?\n/).slice(0, 3)) { page.drawText(addressLine, { x: 24, y: customerY, size: 10, font: regular, color: black }); customerY -= 14 }
-
   const metaX = 350, metaY = 610, metaW = 220, labelW = 105, rowH = 25
   const metaRows = [['DATE', dateUk()], ['VEHICLE REG', body.vehicle_reg || '—'], ['VEHICLE', body.vehicle || '—'], ['MILEAGE', body.mileage !== undefined && body.mileage !== '' ? String(body.mileage) : '—'], ['INV NO', invoiceNumber]]
   metaRows.forEach(([label, value], i) => {
@@ -54,7 +50,6 @@ async function buildPdf(env: Env, invoiceNumber: string, body: Required<Pick<Inv
     const size = value.length > 25 ? 7 : 8; const valueWidth = regular.widthOfTextAtSize(value, size)
     page.drawText(value, { x: metaX + metaW - 8 - valueWidth, y: y - 17, size, font: regular, color: black })
   })
-
   const boxX = 24, boxW = W - 48, jobTop = 500, jobH = 72
   page.drawRectangle({ x: boxX, y: jobTop - jobH, width: boxW, height: jobH, borderColor: line, borderWidth: 0.8 })
   page.drawText('JOB DESCRIPTION', { x: boxX + 8, y: jobTop - 16, size: 8, font: bold, color: black })
@@ -65,7 +60,6 @@ async function buildPdf(env: Env, invoiceNumber: string, body: Required<Pick<Inv
     if (regular.widthOfTextAtSize(next, 9) > boxW - 16) { if (descLine) page.drawText(descLine, { x: boxX + 8, y: descY, size: 9, font: regular, color: black }); descY -= 13; descLine = word } else descLine = next
   }
   if (descLine) page.drawText(descLine, { x: boxX + 8, y: descY, size: 9, font: regular, color: black })
-
   const tableX = 24, tableW = W - 48, amountW = 95, tableTop = 395, headerH = 31, rowH2 = 42
   page.drawRectangle({ x: tableX, y: tableTop - headerH, width: tableW, height: headerH, borderColor: line, borderWidth: 0.8 })
   page.drawText('INVOICE', { x: tableX + tableW / 2 - 26, y: tableTop - 21, size: 9, font: bold, color: black })
@@ -75,13 +69,11 @@ async function buildPdf(env: Env, invoiceNumber: string, body: Required<Pick<Inv
   page.drawText('AMOUNT (£)', { x: tableX + tableW - amountW + 8, y: tableTop - headerH - 20, size: 8, font: bold, color: black })
   page.drawText((body.job_description || 'Workshop services').slice(0, 150), { x: tableX + 8, y: tableTop - headerH - 28, size: body.job_description.length > 90 ? 8 : 9, font: regular, color: black })
   const amountText = money(subtotal); page.drawText(amountText, { x: tableX + tableW - 8 - regular.widthOfTextAtSize(amountText, 9), y: tableTop - headerH - 28, size: 9, font: regular, color: black })
-
   let totalsY = tableTop - headerH - rowH2 - 26
   if (vatAmount > 0) { const vatText = money(vatAmount); page.drawText(`VAT (${Number(body.vat_rate) || 0}%)`, { x: tableX + tableW - amountW - 105, y: totalsY, size: 8, font: regular, color: grey }); page.drawText(vatText, { x: tableX + tableW - 8 - regular.widthOfTextAtSize(vatText, 8), y: totalsY, size: 8, font: regular, color: grey }); totalsY -= 18 }
   const totalText = money(total)
   page.drawText('TOTAL DUE', { x: tableX + tableW - amountW - 30, y: totalsY, size: 9, font: bold, color: black })
   page.drawText(totalText, { x: tableX + tableW - 8 - bold.widthOfTextAtSize(totalText, 9), y: totalsY, size: 9, font: bold, color: black })
-
   const paymentY = 190
   page.drawText('PAYMENT', { x: 24, y: paymentY, size: 9, font: bold, color: black })
   page.drawText('Any queries with this invoice, please contact me on 07535412429 or MHRautoservices@hotmail.com', { x: 24, y: paymentY - 28, size: 8.5, font: regular, color: black })
@@ -104,9 +96,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body: InvoiceBody = await request.json<InvoiceBody>().catch(() => ({} as InvoiceBody))
   if (!body.customer_name || !body.vehicle || !body.job_description) return json({ error: 'Customer, vehicle and job description are required' }, { status: 400 })
   const labour = Number(body.labour) || 0, parts = Number(body.parts) || 0, vatRate = Number(body.vat_rate) || 0
-  const subtotal = labour + parts, vatAmount = subtotal * vatRate / 100, total = subtotal + vatAmount
+  const suppliedInvoiceNumber = String(body.invoice_number || '').trim()
   const seq = await env.DB.prepare('SELECT COUNT(*) AS count FROM invoices').first<{count:number}>()
-  const invoiceNumber = `${env.INVOICE_PREFIX || 'MHR'}-${new Date().getFullYear()}-${String((seq?.count || 0) + 1).padStart(4,'0')}`
+  const generatedInvoiceNumber = `${env.INVOICE_PREFIX || 'MHR'}-${new Date().getFullYear()}-${String((seq?.count || 0) + 1).padStart(4,'0')}`
+  const invoiceNumber = suppliedInvoiceNumber || generatedInvoiceNumber
+  const subtotal = labour + parts, vatAmount = subtotal * vatRate / 100, total = subtotal + vatAmount
   let logoBytes: Uint8Array | undefined
   try { const logoResponse = await fetch('https://raw.githubusercontent.com/DanOrm94/mhrautoservices/main/logo.jpg'); if (logoResponse.ok) logoBytes = new Uint8Array(await logoResponse.arrayBuffer()) } catch { /* logo is optional */ }
   const pdf = await buildPdf(env, invoiceNumber, { ...body, customer_name: body.customer_name, vehicle: body.vehicle, job_description: body.job_description }, total, vatAmount, subtotal, logoBytes)
