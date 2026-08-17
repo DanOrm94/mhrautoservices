@@ -50,7 +50,7 @@ async function buildPdf(env: Env, invoiceNumber: string, body: Required<Pick<Inv
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   if (!(await requireAdmin(request, env))) return json({ error: 'Unauthorized' }, { status: 401 })
-  const { results } = await env.DB.prepare('SELECT id, invoice_number, customer_name, vehicle, total, status, created_at FROM invoices ORDER BY created_at DESC').all()
+  const { results } = await env.DB.prepare('SELECT id, invoice_number, customer_name, vehicle, total, status, pdf_key, created_at FROM invoices ORDER BY created_at DESC').all()
   return json(results)
 }
 
