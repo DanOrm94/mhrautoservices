@@ -17,8 +17,5 @@ GARAGE_NAME = "MHR Auto Services"
 INVOICE_PREFIX = "MHR"
 PUBLIC_ASSET_BASE_URL = "set-in-cloudflare-dashboard"
 
-[secrets]
-required = ["JWT_SECRET", "ADMIN_PASSWORD_HASH", "RESEND_API_KEY", "ADMIN_EMAIL"]
-
-# Create the secrets in the Cloudflare dashboard or with Wrangler.
+# Secrets are configured in the Cloudflare Pages dashboard.
 # Never commit secret values to this file.
