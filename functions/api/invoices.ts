@@ -77,7 +77,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const invoiceNumber = `${env.INVOICE_PREFIX || 'MHR'}-${new Date().getFullYear()}-${String((seq?.count || 0) + 1).padStart(4,'0')}`
   let logoBytes: Uint8Array | undefined
   try {
-    const logoResponse = await fetch(new URL('/logo.jpg', request.url).toString())
+    const logoResponse = await fetch('https://raw.githubusercontent.com/DanOrm94/mhrautoservices/main/logo.jpg')
     if (logoResponse.ok) logoBytes = new Uint8Array(await logoResponse.arrayBuffer())
   } catch { /* logo is optional */ }
   const pdf = await buildPdf(env, invoiceNumber, { ...body, customer_name: body.customer_name, vehicle: body.vehicle, job_description: body.job_description }, total, vatAmount, subtotal, logoBytes)
