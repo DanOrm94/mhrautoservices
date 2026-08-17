@@ -1,8 +1,10 @@
 import { json, type Env } from '../_middleware'
 
+type ContactBody = { name?: string; email?: string; message?: string }
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!env.RESEND_API_KEY || !env.ADMIN_EMAIL) return json({ error: 'Contact email service is not configured' }, { status: 503 })
-  const body = await request.json<{ name?: string; email?: string; message?: string }>().catch(() => ({}))
+  const body: ContactBody = await request.json<ContactBody>().catch(() => ({} as ContactBody))
   if (!body.name || !body.email || !body.message) return json({ error: 'Name, email and message are required' }, { status: 400 })
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
