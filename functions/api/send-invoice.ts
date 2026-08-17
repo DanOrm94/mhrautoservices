@@ -1,9 +1,11 @@
 import { json, requireAdmin, type Env } from '../_middleware'
 
+type SendInvoiceBody = { invoice_id?: number; pdf_key?: string; invoice_number?: string; customer_name?: string; total?: number }
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!(await requireAdmin(request, env))) return json({ error: 'Unauthorized' }, { status: 401 })
   if (!env.RESEND_API_KEY || !env.ADMIN_EMAIL) return json({ error: 'Email service is not configured' }, { status: 503 })
-  const body = await request.json<{ invoice_id?: number; pdf_key?: string; invoice_number?: string; customer_name?: string; total?: number }>().catch(() => ({}))
+  const body: SendInvoiceBody = await request.json<SendInvoiceBody>().catch(() => ({} as SendInvoiceBody))
   if (!body.pdf_key || !body.invoice_number) return json({ error: 'pdf_key and invoice_number are required' }, { status: 400 })
   const pdf = await env.MEDIA.get(body.pdf_key)
   if (!pdf) return json({ error: 'Invoice PDF not found' }, { status: 404 })
