@@ -8,6 +8,7 @@ const nativeOpen = window.open.bind(window)
 const nativeFetch = window.fetch.bind(window)
 
 let lastCreatedInvoice: { id: number; invoiceNumber: string; pdfKey: string; total: number } | null = null
+let lastCreatedInvoicePromise: Promise<typeof lastCreatedInvoice> | null = null
 
 function invoiceEmailEnabled() {
   return document.querySelector<HTMLInputElement>('[data-invoice-email-option]')?.checked === true
@@ -57,16 +58,16 @@ window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 
   if (method === 'POST' && url.includes('/api/invoices') && response.ok) {
     const clone = response.clone()
-    void clone.json().then(data => {
-      if (data?.id && data?.invoiceNumber && data?.pdfKey) {
-        lastCreatedInvoice = {
-          id: Number(data.id),
-          invoiceNumber: String(data.invoiceNumber),
-          pdfKey: String(data.pdfKey),
-          total: Number(data.total) || 0,
-        }
+    lastCreatedInvoicePromise = clone.json().then(data => {
+      if (!data?.id || !data?.invoiceNumber || !data?.pdfKey) return lastCreatedInvoice
+      lastCreatedInvoice = {
+        id: Number(data.id),
+        invoiceNumber: String(data.invoiceNumber),
+        pdfKey: String(data.pdfKey),
+        total: Number(data.total) || 0,
       }
-    }).catch(() => undefined)
+      return lastCreatedInvoice
+    }).catch(() => lastCreatedInvoice)
   }
 
   return response
@@ -99,20 +100,28 @@ window.open = ((url?: string | URL, target?: string, features?: string) => {
       popup.document.body.innerHTML = `<p style="font-family:sans-serif;padding:24px">${error instanceof Error ? error.message : 'Could not load invoice PDF.'}</p>`
     })
 
-  if (invoiceEmailEnabled() && lastCreatedInvoice && token) {
-    const invoice = lastCreatedInvoice
-    setInvoiceEmailStatus('Sending PDF to your admin email…')
-    void nativeFetch('/api/send-invoice', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify(invoice),
-    })
-      .then(async response => {
+  if (invoiceEmailEnabled() && token) {
+    void (async () => {
+      const invoice = lastCreatedInvoicePromise ? await lastCreatedInvoicePromise : lastCreatedInvoice
+      if (!invoice) {
+        setInvoiceEmailStatus('Could not identify the new invoice for email.', true)
+        return
+      }
+
+      setInvoiceEmailStatus('Sending PDF to your admin email…')
+      try {
+        const response = await nativeFetch('/api/send-invoice', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+          body: JSON.stringify(invoice),
+        })
         const data = await response.json().catch(() => ({})) as { error?: string }
         if (!response.ok) throw new Error(data.error || 'Could not email invoice')
         setInvoiceEmailStatus('PDF emailed to your admin email.')
-      })
-      .catch(error => setInvoiceEmailStatus(error instanceof Error ? error.message : 'Could not email invoice', true))
+      } catch (error) {
+        setInvoiceEmailStatus(error instanceof Error ? error.message : 'Could not email invoice', true)
+      }
+    })()
   }
 
   return popup
