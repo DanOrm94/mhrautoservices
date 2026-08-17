@@ -40,7 +40,7 @@ async function buildPdf(env: Env, invoiceNumber: string, body: Required<Pick<Inv
   y -= 25
   const rows = [['Labour', money(Number(body.labour)||0)], ['Parts', money(Number(body.parts)||0)]]
   for (const [label,value] of rows) { page.drawText(label,{x:42,y,size:10,font:regular,color:rgb(.86,.87,.89)}); page.drawText(value,{x:470,y,size:10,font:regular,color:rgb(.86,.87,.89)}); y-=24 }
-  page.drawLine({ start:{x:42,y+8},end:{x:553,y+8},thickness:1,color:rgb(.18,.2,.23)}); y-=12
+  page.drawLine({ start:{x:42,y:y+8},end:{x:553,y:y+8},thickness:1,color:rgb(.18,.2,.23)}); y-=12
   page.drawText('Subtotal',{x:42,y,size:9,font:bold,color:rgb(.65,.67,.7)}); page.drawText(money(subtotal),{x:470,y,size:9,font:bold,color:rgb(.65,.67,.7)}); y-=21
   page.drawText(`VAT (${Number(body.vat_rate)||0}%)`,{x:42,y,size:9,font:regular,color:rgb(.65,.67,.7)}); page.drawText(money(vatAmount),{x:470,y,size:9,font:regular,color:rgb(.65,.67,.7)}); y-=30
   page.drawText('TOTAL',{x:42,y,size:13,font:bold,color:rgb(1,1,1)}); page.drawText(money(total),{x:460,y,size:13,font:bold,color:orange})
