@@ -2,62 +2,94 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { json, requireAdmin, type Env } from '../_middleware'
 
 type InvoiceBody = {
-  customer_name?: string; customer_email?: string; customer_phone?: string; vehicle?: string; job_description?: string
-  labour?: number; parts?: number; vat_rate?: number; image_keys?: string[]
+  customer_name?: string
+  customer_email?: string
+  customer_phone?: string
+  customer_address?: string
+  vehicle?: string
+  vehicle_reg?: string
+  mileage?: string | number
+  job_description?: string
+  labour?: number
+  parts?: number
+  vat_rate?: number
+  image_keys?: string[]
 }
 
 function money(value: number) { return `£${value.toFixed(2)}` }
+function dateUk() { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}` }
 
-async function buildPdf(env: Env, invoiceNumber: string, body: Required<Pick<InvoiceBody,'customer_name'|'vehicle'|'job_description'>> & InvoiceBody, total: number, vatAmount: number, subtotal: number, logoBytes?: Uint8Array) {
+async function buildPdf(env: Env, invoiceNumber: string, body: Required<Pick<InvoiceBody, 'customer_name' | 'vehicle' | 'job_description'>> & InvoiceBody, total: number, vatAmount: number, subtotal: number, logoBytes?: Uint8Array) {
   const doc = await PDFDocument.create()
   const regular = await doc.embedFont(StandardFonts.Helvetica)
   const bold = await doc.embedFont(StandardFonts.HelveticaBold)
   const page = doc.addPage([595.28, 841.89])
-  const width = page.getWidth()
-  const orange = rgb(0.95, 0.31, 0.08)
-  const dark = rgb(0.08, 0.09, 0.11)
-  const muted = rgb(0.36, 0.38, 0.42)
-  const lightLine = rgb(0.86, 0.87, 0.89)
-  page.drawRectangle({ x: 0, y: 0, width, height: page.getHeight(), color: rgb(1,1,1) })
-  page.drawLine({ start: {x:42,y:760}, end:{x:553,y:760}, thickness:2, color:orange })
+  const W = page.getWidth(); const H = page.getHeight()
+  const black = rgb(0.16, 0.16, 0.16); const grey = rgb(0.38, 0.38, 0.38); const line = rgb(0.72, 0.72, 0.72); const white = rgb(1, 1, 1)
+  page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: white })
+
+  // Supplied template: centred logo at the top and a clean black/grey print layout.
   if (logoBytes?.length) {
     try {
       const logo = await doc.embedJpg(logoBytes)
-      const scale = Math.min(150 / logo.width, 58 / logo.height)
-      page.drawImage(logo, { x: 42, y: 778, width: logo.width * scale, height: logo.height * scale })
-    } catch {
-      page.drawText(env.GARAGE_NAME || 'MHR Auto Services', { x: 42, y: 792, size: 22, font: bold, color: dark })
-    }
-  } else {
-    page.drawText(env.GARAGE_NAME || 'MHR Auto Services', { x: 42, y: 792, size: 22, font: bold, color: dark })
+      const scale = Math.min(125 / logo.width, 105 / logo.height)
+      const logoW = logo.width * scale; const logoH = logo.height * scale
+      page.drawImage(logo, { x: (W - logoW) / 2, y: 735, width: logoW, height: logoH })
+    } catch { page.drawText(env.GARAGE_NAME || 'MHR Auto Services', { x: 42, y: 755, size: 20, font: bold, color: black }) }
+  } else page.drawText(env.GARAGE_NAME || 'MHR Auto Services', { x: 42, y: 755, size: 20, font: bold, color: black })
+
+  page.drawText('INVOICE', { x: 490, y: 690, size: 22, font: bold, color: grey })
+
+  let customerY = 655
+  page.drawText(body.customer_name, { x: 24, y: customerY, size: 10, font: regular, color: black }); customerY -= 14
+  if (body.customer_address) for (const addressLine of String(body.customer_address).split(/\r?\n/).slice(0, 3)) { page.drawText(addressLine, { x: 24, y: customerY, size: 10, font: regular, color: black }); customerY -= 14 }
+
+  const metaX = 350, metaY = 610, metaW = 220, labelW = 105, rowH = 25
+  const metaRows = [['DATE', dateUk()], ['VEHICLE REG', body.vehicle_reg || '—'], ['VEHICLE', body.vehicle || '—'], ['MILEAGE', body.mileage !== undefined && body.mileage !== '' ? String(body.mileage) : '—'], ['INV NO', invoiceNumber]]
+  metaRows.forEach(([label, value], i) => {
+    const y = metaY - i * rowH
+    page.drawRectangle({ x: metaX, y: y - rowH + 1, width: metaW, height: rowH, borderColor: line, borderWidth: 0.7 })
+    page.drawLine({ start: { x: metaX + labelW, y: y - rowH + 1 }, end: { x: metaX + labelW, y }, thickness: 0.7, color: line })
+    page.drawText(label, { x: metaX + 8, y: y - 17, size: 8, font: bold, color: black })
+    const size = value.length > 25 ? 7 : 8; const valueWidth = regular.widthOfTextAtSize(value, size)
+    page.drawText(value, { x: metaX + metaW - 8 - valueWidth, y: y - 17, size, font: regular, color: black })
+  })
+
+  const boxX = 24, boxW = W - 48, jobTop = 500, jobH = 72
+  page.drawRectangle({ x: boxX, y: jobTop - jobH, width: boxW, height: jobH, borderColor: line, borderWidth: 0.8 })
+  page.drawText('JOB DESCRIPTION', { x: boxX + 8, y: jobTop - 16, size: 8, font: bold, color: black })
+  page.drawLine({ start: { x: boxX, y: jobTop - 25 }, end: { x: boxX + boxW, y: jobTop - 25 }, thickness: 0.7, color: line })
+  let descY = jobTop - 40; let descLine = ''
+  for (const word of body.job_description.split(/\s+/)) {
+    const next = descLine ? `${descLine} ${word}` : word
+    if (regular.widthOfTextAtSize(next, 9) > boxW - 16) { if (descLine) page.drawText(descLine, { x: boxX + 8, y: descY, size: 9, font: regular, color: black }); descY -= 13; descLine = word } else descLine = next
   }
-  page.drawText('INVOICE', { x: 430, y: 794, size: 18, font: bold, color: dark })
-  page.drawText(invoiceNumber, { x: 430, y: 774, size: 10, font: regular, color: muted })
-  let y = 720
-  page.drawText('BILL TO', { x: 42, y, size: 8, font: bold, color: orange })
-  y -= 22
-  page.drawText(body.customer_name, { x: 42, y, size: 13, font: bold, color: dark })
-  y -= 17
-  page.drawText(body.vehicle, { x: 42, y, size: 10, font: regular, color: muted })
-  if (body.customer_email) { y -= 14; page.drawText(body.customer_email, { x: 42, y, size: 9, font: regular, color: muted }) }
-  if (body.customer_phone) { y -= 13; page.drawText(body.customer_phone, { x: 42, y, size: 9, font: regular, color: muted }) }
-  y = 650
-  page.drawLine({ start: {x:42,y}, end:{x:553,y}, thickness:1, color:lightLine })
-  y -= 28
-  page.drawText('JOB DESCRIPTION', { x: 42, y, size: 8, font: bold, color: orange })
-  y -= 19
-  const words = body.job_description.split(/\s+/); let line=''
-  for (const word of words) { const next = line ? `${line} ${word}` : word; if (regular.widthOfTextAtSize(next,9) > 500) { page.drawText(line,{x:42,y,size:9,font:regular,color:muted}); y-=14; line=word } else line=next }
-  if (line) { page.drawText(line,{x:42,y,size:9,font:regular,color:muted}); y-=14 }
-  y -= 25
-  const rows = [['Labour', money(Number(body.labour)||0)], ['Parts', money(Number(body.parts)||0)]]
-  for (const [label,value] of rows) { page.drawText(label,{x:42,y,size:10,font:regular,color:dark}); page.drawText(value,{x:470,y,size:10,font:regular,color:dark}); y-=24 }
-  page.drawLine({ start:{x:42,y:y+8},end:{x:553,y:y+8},thickness:1,color:lightLine }); y-=12
-  page.drawText('Subtotal',{x:42,y,size:9,font:bold,color:muted}); page.drawText(money(subtotal),{x:470,y,size:9,font:bold,color:muted}); y-=21
-  page.drawText(`VAT (${Number(body.vat_rate)||0}%)`,{x:42,y,size:9,font:regular,color:muted}); page.drawText(money(vatAmount),{x:470,y,size:9,font:regular,color:muted}); y-=30
-  page.drawText('TOTAL',{x:42,y,size:13,font:bold,color:dark}); page.drawText(money(total),{x:460,y,size:13,font:bold,color:orange})
-  page.drawLine({ start:{x:42,y:y-20},end:{x:553,y:y-20},thickness:1,color:lightLine })
-  page.drawText('Thank you for trusting MHR Auto Services.',{x:42,y:58,size:9,font:regular,color:muted})
+  if (descLine) page.drawText(descLine, { x: boxX + 8, y: descY, size: 9, font: regular, color: black })
+
+  const tableX = 24, tableW = W - 48, amountW = 95, tableTop = 395, headerH = 31, rowH2 = 42
+  page.drawRectangle({ x: tableX, y: tableTop - headerH, width: tableW, height: headerH, borderColor: line, borderWidth: 0.8 })
+  page.drawText('INVOICE', { x: tableX + tableW / 2 - 26, y: tableTop - 21, size: 9, font: bold, color: black })
+  page.drawRectangle({ x: tableX, y: tableTop - headerH - rowH2, width: tableW, height: rowH2, borderColor: line, borderWidth: 0.8 })
+  page.drawLine({ start: { x: tableX + tableW - amountW, y: tableTop - headerH - rowH2 }, end: { x: tableX + tableW - amountW, y: tableTop }, thickness: 0.8, color: line })
+  page.drawText('ITEM', { x: tableX + 8, y: tableTop - headerH - 20, size: 8, font: bold, color: black })
+  page.drawText('AMOUNT (£)', { x: tableX + tableW - amountW + 8, y: tableTop - headerH - 20, size: 8, font: bold, color: black })
+  page.drawText((body.job_description || 'Workshop services').slice(0, 150), { x: tableX + 8, y: tableTop - headerH - 28, size: body.job_description.length > 90 ? 8 : 9, font: regular, color: black })
+  const amountText = money(subtotal); page.drawText(amountText, { x: tableX + tableW - 8 - regular.widthOfTextAtSize(amountText, 9), y: tableTop - headerH - 28, size: 9, font: regular, color: black })
+
+  let totalsY = tableTop - headerH - rowH2 - 26
+  if (vatAmount > 0) { const vatText = money(vatAmount); page.drawText(`VAT (${Number(body.vat_rate) || 0}%)`, { x: tableX + tableW - amountW - 105, y: totalsY, size: 8, font: regular, color: grey }); page.drawText(vatText, { x: tableX + tableW - 8 - regular.widthOfTextAtSize(vatText, 8), y: totalsY, size: 8, font: regular, color: grey }); totalsY -= 18 }
+  const totalText = money(total)
+  page.drawText('TOTAL DUE', { x: tableX + tableW - amountW - 30, y: totalsY, size: 9, font: bold, color: black })
+  page.drawText(totalText, { x: tableX + tableW - 8 - bold.widthOfTextAtSize(totalText, 9), y: totalsY, size: 9, font: bold, color: black })
+
+  const paymentY = 190
+  page.drawText('PAYMENT', { x: 24, y: paymentY, size: 9, font: bold, color: black })
+  page.drawText('Any queries with this invoice, please contact me on 07535412429 or MHRautoservices@hotmail.com', { x: 24, y: paymentY - 28, size: 8.5, font: regular, color: black })
+  page.drawText('Please make payment to:', { x: 24, y: paymentY - 53, size: 8.5, font: regular, color: black })
+  page.drawText('MHR Auto Services', { x: 205, y: paymentY - 53, size: 8.5, font: regular, color: black })
+  page.drawText('Account No: 32915844', { x: 335, y: paymentY - 53, size: 8.5, font: regular, color: black })
+  page.drawText('Sort Code: 15-10-00', { x: 470, y: paymentY - 53, size: 8.5, font: regular, color: black })
+  const thanks = 'Thank you for your business!'; page.drawText(thanks, { x: (W - bold.widthOfTextAtSize(thanks, 9)) / 2, y: 55, size: 9, font: bold, color: black })
   return doc.save()
 }
 
@@ -71,15 +103,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!(await requireAdmin(request, env))) return json({ error: 'Unauthorized' }, { status: 401 })
   const body: InvoiceBody = await request.json<InvoiceBody>().catch(() => ({} as InvoiceBody))
   if (!body.customer_name || !body.vehicle || !body.job_description) return json({ error: 'Customer, vehicle and job description are required' }, { status: 400 })
-  const labour = Number(body.labour)||0, parts = Number(body.parts)||0, vatRate = Number(body.vat_rate)||0
+  const labour = Number(body.labour) || 0, parts = Number(body.parts) || 0, vatRate = Number(body.vat_rate) || 0
   const subtotal = labour + parts, vatAmount = subtotal * vatRate / 100, total = subtotal + vatAmount
   const seq = await env.DB.prepare('SELECT COUNT(*) AS count FROM invoices').first<{count:number}>()
   const invoiceNumber = `${env.INVOICE_PREFIX || 'MHR'}-${new Date().getFullYear()}-${String((seq?.count || 0) + 1).padStart(4,'0')}`
   let logoBytes: Uint8Array | undefined
-  try {
-    const logoResponse = await fetch('https://raw.githubusercontent.com/DanOrm94/mhrautoservices/main/logo.jpg')
-    if (logoResponse.ok) logoBytes = new Uint8Array(await logoResponse.arrayBuffer())
-  } catch { /* logo is optional */ }
+  try { const logoResponse = await fetch('https://raw.githubusercontent.com/DanOrm94/mhrautoservices/main/logo.jpg'); if (logoResponse.ok) logoBytes = new Uint8Array(await logoResponse.arrayBuffer()) } catch { /* logo is optional */ }
   const pdf = await buildPdf(env, invoiceNumber, { ...body, customer_name: body.customer_name, vehicle: body.vehicle, job_description: body.job_description }, total, vatAmount, subtotal, logoBytes)
   const pdfKey = `invoices/${invoiceNumber}.pdf`
   await env.MEDIA.put(pdfKey, pdf, { httpMetadata: { contentType: 'application/pdf' } })
