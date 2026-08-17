@@ -4,8 +4,8 @@ pages_build_output_dir = "dist"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "mhr-auto-services"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_name = "mhrautoservices-db"
+database_id = "7da676eb-c92b-417c-b747-8efc5bc47cc1"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
