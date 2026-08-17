@@ -56,7 +56,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!(await requireAdmin(request, env))) return json({ error: 'Unauthorized' }, { status: 401 })
-  const body = await request.json<InvoiceBody>().catch(() => ({}))
+  const body: InvoiceBody = await request.json<InvoiceBody>().catch(() => ({} as InvoiceBody))
   if (!body.customer_name || !body.vehicle || !body.job_description) return json({ error: 'Customer, vehicle and job description are required' }, { status: 400 })
   const labour = Number(body.labour)||0, parts = Number(body.parts)||0, vatRate = Number(body.vat_rate)||0
   const subtotal = labour + parts, vatAmount = subtotal * vatRate / 100, total = subtotal + vatAmount
