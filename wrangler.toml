@@ -9,7 +9,7 @@ database_id = "REPLACE_WITH_D1_DATABASE_ID"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
-binding = "ASSETS"
+binding = "MEDIA"
 bucket_name = "mhr-auto-services-assets"
 
 [vars]
