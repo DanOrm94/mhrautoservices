@@ -6,18 +6,19 @@ pages_build_output_dir = "dist"
 binding = "DB"
 database_name = "mhr-auto-services"
 database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "ASSETS"
 bucket_name = "mhr-auto-services-assets"
 
 [vars]
-ADMIN_EMAIL = "set-in-cloudflare-dashboard"
 GARAGE_NAME = "MHR Auto Services"
 INVOICE_PREFIX = "MHR"
 PUBLIC_ASSET_BASE_URL = "set-in-cloudflare-dashboard"
 
-# Secrets to configure in Cloudflare (never commit values):
-# JWT_SECRET
-# ADMIN_PASSWORD_HASH
-# RESEND_API_KEY
+[secrets]
+required = ["JWT_SECRET", "ADMIN_PASSWORD_HASH", "RESEND_API_KEY", "ADMIN_EMAIL"]
+
+# Create the secrets in the Cloudflare dashboard or with Wrangler.
+# Never commit secret values to this file.
