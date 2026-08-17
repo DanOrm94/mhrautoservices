@@ -64,7 +64,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const invoiceNumber = `${env.INVOICE_PREFIX || 'MHR'}-${new Date().getFullYear()}-${String((seq?.count || 0) + 1).padStart(4,'0')}`
   const pdf = await buildPdf(env, invoiceNumber, { ...body, customer_name: body.customer_name, vehicle: body.vehicle, job_description: body.job_description }, total, vatAmount, subtotal)
   const pdfKey = `invoices/${invoiceNumber}.pdf`
-  await env.ASSETS.put(pdfKey, pdf, { httpMetadata: { contentType: 'application/pdf' } })
+  await env.MEDIA.put(pdfKey, pdf, { httpMetadata: { contentType: 'application/pdf' } })
   const inserted = await env.DB.prepare(`INSERT INTO invoices (invoice_number, customer_name, customer_email, customer_phone, vehicle, job_description, labour, parts, vat_rate, subtotal, vat_amount, total, pdf_key, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'generated')`).bind(invoiceNumber, body.customer_name, body.customer_email || '', body.customer_phone || '', body.vehicle, body.job_description, labour, parts, vatRate, subtotal, vatAmount, total, pdfKey).run()
   const invoiceId = Number(inserted.meta.last_row_id)
   for (const key of body.image_keys || []) await env.DB.prepare('INSERT INTO invoice_images (invoice_id, image_key) VALUES (?, ?)').bind(invoiceId, key).run()
