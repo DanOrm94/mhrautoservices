@@ -5,7 +5,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!env.RESEND_API_KEY || !env.ADMIN_EMAIL) return json({ error: 'Email service is not configured' }, { status: 503 })
   const body = await request.json<{ invoice_id?: number; pdf_key?: string; invoice_number?: string; customer_name?: string; total?: number }>().catch(() => ({}))
   if (!body.pdf_key || !body.invoice_number) return json({ error: 'pdf_key and invoice_number are required' }, { status: 400 })
-  const pdf = await env.ASSETS.get(body.pdf_key)
+  const pdf = await env.MEDIA.get(body.pdf_key)
   if (!pdf) return json({ error: 'Invoice PDF not found' }, { status: 404 })
   const bytes = new Uint8Array(await pdf.arrayBuffer())
   let binary = ''
