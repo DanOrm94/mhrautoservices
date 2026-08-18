@@ -1,5 +1,8 @@
 (() => {
-  const images = ['/mhr1.png', '/mhr2.png', '/mhr3.png'];
+  // These files live at the repository root. Vite does not copy root-level
+  // binary assets into dist, so load them from the public GitHub repository.
+  const base = 'https://raw.githubusercontent.com/DanOrm94/mhrautoservices/main/';
+  const images = ['mhr1.png', 'mhr2.png', 'mhr3.png'].map(name => base + name);
 
   function setupRecentWorkSlideshow() {
     if (window.location.pathname !== '/work') return;
